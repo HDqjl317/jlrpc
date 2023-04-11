@@ -123,7 +123,7 @@ func (server *Server) sendResponse(cc codec.Codec, h *codec.Header, body interfa
 func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup) {
 	defer wg.Done()
 	log.Println(req.h, req.argv.Elem())
-	req.replyv = reflect.ValueOf(fmt.Sprintf("geerpc resp %d", req.h.Seq))
+	req.replyv = reflect.ValueOf(fmt.Sprintf("jlrpc resp %d", req.h.Seq))
 	server.sendResponse(cc, req.h, req.replyv.Interface(), sending)
 }
 
@@ -140,6 +140,4 @@ func (server *Server) Accept(lis net.Listener) {
 	}
 }
 
-// Accept accepts connections on the listener and serves requests
-// for each incoming connection.
 func Accept(lis net.Listener) { DefaultServer.Accept(lis) }
