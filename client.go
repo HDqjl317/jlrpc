@@ -1,13 +1,14 @@
 /*
  * @Author: jiale_quan jiale_quan@ustc.edu
  * @Date: 2023-04-11 14:22:24
- * @LastEditTime: 2023-04-13 10:43:01
+ * @LastEditTime: 2023-04-13 14:06:03
  * @Description:
  * Copyright © jiale_quan, All Rights Reserved
  */
 package jlrpc
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,8 @@ import (
 	"jlrpc/codec"
 	"log"
 	"net"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -35,7 +38,7 @@ func (call *Call) done() {
 
 /*
  * Client is an RPC Client.
- * Therr may be mutiple outstanding Calls associated with a single Client,
+ * There may be mutiple outstanding Calls associated with a single Client,
  * and a Client may be used by multiple goroutines simultaneously
  */
 type Client struct {
@@ -276,5 +279,48 @@ func dialTimeout(f newClientFunc, network, address string, opts ...*Option) (cli
 		return nil, fmt.Errorf("rpc client: connect timeout: expect within %s", opt.ConnectTimeout)
 	case result := <-ch:
 		return result.client, result.err
+	}
+}
+
+/*
+ * NewHTTPClient new a Client instance via HTTP as transport protocol
+ */
+func NewHTTPClient(conn net.Conn, opt *Option) (*Client, error) {
+	_, _ = io.WriteString(conn, fmt.Sprintf("CONNECT %s HTTP/1.0\n\n", defaultRPCPath))
+
+	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: "CONNECT"})
+	if err == nil && resp.Status == connected {
+		return NewClient(conn, opt)
+	}
+	if err == nil {
+		err = errors.New("unexpected HTTP response: " + resp.Status)
+	}
+	return nil, err
+}
+
+/*
+ * DialHTTP connects to an HTTP RPCserver at the specified network address
+ * listening on the default HTTP RPC path.
+ */
+func DialHTTP(network, address string, opts ...*Option) (*Client, error) {
+	return dialTimeout(NewHTTPClient, network, address, opts...)
+}
+
+/*
+ *  XDial calls different functions to connect to a RPC server according the first parameter rpcAddr.
+ *  rpcAddr is a general format (protocol@addr) to represent a rpc server
+ *  such as, http@192.168.100.192:7001, tcp@@192.168.100.192:7002, unix@/tmp/jlrpc.sock
+ */
+func XDial(rpcAddr string, opts ...*Option) (*Client, error) {
+	parts := strings.Split(rpcAddr, "@")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("rpc client err: wrong format '%s' expect prorocol@addr", rpcAddr)
+	}
+	protocol, addr := parts[0], parts[1]
+	switch protocol {
+	case "http":
+		return DialHTTP("tcp", addr, opts...)
+	default:
+		return Dial(protocol, addr, opts...)
 	}
 }

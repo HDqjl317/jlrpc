@@ -1,7 +1,7 @@
 /*
  * @Author: jiale_quan jiale_quan@ustc.edu
  * @Date: 2023-04-13 10:53:03
- * @LastEditTime: 2023-04-13 11:05:20
+ * @LastEditTime: 2023-04-13 14:32:14
  * @Description:
  * Copyright © jiale_quan, All Rights Reserved
  */
@@ -10,6 +10,8 @@ package jlrpc
 import (
 	"context"
 	"net"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -75,4 +77,23 @@ func TestClient_Call(t *testing.T) {
 		err := client.Call(context.Background(), "Bar.Timeout", 1, &reply)
 		_assert(err != nil && strings.Contains(err.Error(), "handle timeout"), "expect a timeout error")
 	})
+}
+
+func TestDial(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		ch := make(chan struct{})
+		addr := "/tmp/jlrpc.sock"
+		go func() {
+			_ = os.Remove(addr)
+			l, err := net.Listen("unix", addr)
+			if err != nil {
+				t.Fatal("failed to listen unix socket")
+			}
+			ch <- struct{}{}
+			Accept(l)
+		}()
+		<-ch
+		_, err := XDial("unix@" + addr)
+		_assert(err == nil, "failed to connect unix socket")
+	}
 }
